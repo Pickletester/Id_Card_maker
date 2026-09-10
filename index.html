@@ -55,7 +55,14 @@
     body{background:#fff}
     .app{display:none}
     #printarea{display:block}
-    #printarea img{display:block;width:85.6mm;height:54mm;page-break-after:always}
+    #printarea img{
+      display:block;
+      width:calc(85.6mm * var(--pscale,1));
+      height:calc(54mm * var(--pscale,1));
+      margin-left:var(--pox,0mm);
+      margin-top:var(--poy,0mm);
+      page-break-after:always;
+    }
     #printarea img:last-child{page-break-after:auto}
   }
 </style>
@@ -121,6 +128,20 @@
   <fieldset>
     <legend>Barcode</legend>
     <div class="hint">Code 128 — locked, to match CourtReserve.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Print calibration</legend>
+    <div class="row">
+      <div><label>Offset X (mm)</label>
+        <input type="number" id="pox" value="0" step="0.2" min="-8" max="8"></div>
+      <div><label>Offset Y (mm)</label>
+        <input type="number" id="poy" value="0" step="0.2" min="-8" max="8"></div>
+    </div>
+    <label>Scale (%)</label>
+    <input type="number" id="pscale" value="100" step="0.5" min="90" max="110">
+    <div class="hint">Shifts the printed image on the card. Positive X moves right,
+      positive Y moves down. Saved on this computer.</div>
   </fieldset>
 
   <fieldset>
@@ -692,6 +713,34 @@ function info(){
   $("rosterInfo").textContent = bits.join(" · ") + ".";
 }
 
+/* -------------------------------------------------- print calibration */
+/* Applied to the printed image only — the card art itself is untouched, so
+   this compensates for printer registration without redrawing anything. */
+const CAL = {ox:0, oy:0, scale:100};
+function loadCal(){
+  try{
+    const raw = localStorage.getItem("levelup-card-cal");
+    if(raw) Object.assign(CAL, JSON.parse(raw));
+  }catch(_){ /* private window, blocked storage — defaults are fine */ }
+  $("pox").value = CAL.ox; $("poy").value = CAL.oy; $("pscale").value = CAL.scale;
+  applyCal();
+}
+function applyCal(){
+  const r = document.documentElement.style;
+  r.setProperty("--pox", CAL.ox + "mm");
+  r.setProperty("--poy", CAL.oy + "mm");
+  r.setProperty("--pscale", CAL.scale/100);
+  try{ localStorage.setItem("levelup-card-cal", JSON.stringify(CAL)); }catch(_){}
+}
+["pox","poy","pscale"].forEach(id=>{
+  $(id).addEventListener("input", e=>{
+    const v = parseFloat(e.target.value);
+    if(isNaN(v)) return;
+    CAL[id==="pox"?"ox":id==="poy"?"oy":"scale"] = v;
+    applyCal();
+  });
+});
+
 /* ------------------------------------------------------------- output */
 function dl(canvas,label){
   const a = document.createElement("a");
@@ -718,6 +767,7 @@ $("print").onclick = ()=>{
 
 /* --------------------------------------------------------------- boot */
 $("since").value = "2025-11-01"; S.since = "2025-11-01";
+loadCal();
 logoImg = new Image();
 logoImg.onload = render;
 logoImg.onerror = render;
